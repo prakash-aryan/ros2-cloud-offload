@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="realsense_d455">
+    <link name="body">
+      <visual name="v">
+        <geometry>
+          <mesh>
+            <uri>model://realsense_d455/meshes/d455.stl</uri>
+            <scale>0.001 0.001 0.001</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.12 0.12 0.12 1</ambient>
+          <diffuse>0.12 0.12 0.12 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,56 @@
+# Local-side image: ROS Humble + Gazebo Sim Harmonic + offload tooling +
+# FastAPI dashboard backend serving the compiled React frontend.
+#
+# Stage 1 builds the TypeScript/React SPA so we don't need node in the
+# runtime image.
+#
+# Use with --net=host + --gpus all + mount this repo into
+# /root/fog_ws/src/FogROS2.
+
+# ---------- stage 1: frontend builder ----------
+FROM node:20-alpine AS frontend-builder
+WORKDIR /build
+COPY dashboard/frontend/package.json ./package.json
+RUN npm install --no-audit --no-fund
+COPY dashboard/frontend/ ./
+RUN npm run build
+
+# ---------- stage 2: ROS + backend runtime ----------
+FROM osrf/ros:humble-desktop
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+        curl \
+        gnupg \
+        lsb-release \
+        python3-pip \
+        wireguard-tools \
+        openssh-client \
+        iputils-ping \
+        iproute2 \
+        ros-humble-rmw-cyclonedds-cpp \
+    && curl -sSL https://packages.osrfoundation.org/gazebo.gpg \
+        -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
+        > /etc/apt/sources.list.d/gazebo-stable.list \
+    && apt-get update && apt-get install -y \
+        gz-harmonic \
+        ros-humble-ros-gzharmonic \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir \
+        wgconfig boto3 paramiko scp \
+        fastapi==0.115.4 "uvicorn[standard]==0.32.0"
+
+# Dashboard backend + built frontend end up under /opt/dashboard.
+RUN mkdir -p /opt/dashboard/backend /opt/dashboard/frontend/dist
+COPY dashboard/backend/ /opt/dashboard/backend/
+COPY --from=frontend-builder /build/dist /opt/dashboard/frontend/dist
+
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ENV CYCLONEDDS_URI=file:///etc/cyclonedds_local.xml
+ENV DASHBOARD_BACKEND_DIR=/opt/dashboard/backend
+ENV DASHBOARD_FRONTEND_DIST=/opt/dashboard/frontend/dist
+
+WORKDIR /root/fog_ws
