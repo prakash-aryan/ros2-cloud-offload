@@ -13,6 +13,35 @@ process the bot's `/scan` (lidar) and `/camera/depth/image_rect_raw`
 can swap in your own offloaded compute (SLAM, perception, planning,
 LLM-backed reasoning, …) without changing the topology.
 
+## Status
+
+**Done**
+
+- [x] `LocalMachine` provider — push/build/launch over plain SSH, no AWS/GCP/k8s
+- [x] CycloneDDS config rendered from `.env` so peers + interface are not hard-coded
+- [x] Tailscale-as-the-private-network path verified end-to-end
+- [x] TB3 burger sim in Gazebo Harmonic with the ROBOTIS `turtlebot3_world`
+- [x] Sim'd Intel RealSense D455 depth camera on the bot (real D455 mesh vendored)
+- [x] Cloud nodes: `scan_listener` (LaserScan stats), `depth_listener` (depth stats + bandwidth)
+- [x] FastAPI + rclpy backend with WebSocket fan-out
+- [x] React + TypeScript + Chakra UI dashboard with topology view, status dots, eased animated flow arrows
+- [x] Multi-stage Dockerfile (Node builds the SPA, ROS Humble runs it)
+- [x] All connection details flow from `.env`; nothing about the user's machines is hard-coded
+
+**Planned**
+
+- [ ] Drive the bot from the dashboard (browser-side `/cmd_vel` controls)
+- [ ] Swap the demo offload for a heavier real workload (SLAM / perception model / LLM-backed reasoning)
+- [ ] Compress depth before publishing (image_transport / draco) so we can scale resolution + rate without saturating the wire
+- [ ] Bridge more sensors (IMU stream, RGB camera) and surface them on the dashboard
+- [ ] Per-flow latency histograms (p50 / p95 / p99) instead of just a one-way snapshot
+- [ ] Multi-cloud / multi-machine offload (more than one `LocalMachine` target in one launch)
+- [ ] Graceful reconnection when the cloud machine goes away and comes back
+- [ ] Documented "running on real hardware" path (real TB3 or another robot) with the same launch
+- [ ] Lightweight auth on the dashboard so it's safe to expose beyond `localhost`
+- [ ] CI: build the Docker image and run a no-network smoke test
+- [ ] `KubernetesMachine` provider — same `CloudNode(machine=…)` API as `LocalMachine`, but each cloud node lands as a Deployment (or per-launch Job) on a k8s/k3s cluster instead of a single SSH host; auto-discovers via DDS over the cluster's pod network or a shared Tailnet, scales horizontally for replicated workers
+
 ## What it looks like
 
 ![architecture](docs/architecture.png)
