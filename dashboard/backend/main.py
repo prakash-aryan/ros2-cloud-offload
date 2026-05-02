@@ -23,9 +23,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 import rclpy
+from builtin_interfaces.msg import Time as RosTime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
@@ -40,6 +42,9 @@ FRONTEND_DIST = Path(
     os.environ.get("DASHBOARD_FRONTEND_DIST", HERE.parent / "frontend" / "dist")
 )
 PORT = int(os.environ.get("DASHBOARD_PORT", "8000"))
+
+CMD_VEL_MAX_HZ = float(os.environ.get("CMD_VEL_MAX_HZ", "20"))
+_CMD_VEL_MIN_INTERVAL = 1.0 / CMD_VEL_MAX_HZ
 
 
 @dataclass
@@ -62,9 +67,10 @@ class LatestFrames:
 
 LATEST = LatestFrames()
 
+_dashboard_node: "DashboardNode | None" = None
+
 
 class DashboardNode(Node):
-    """rclpy node — mirrors topic data into the LATEST cache."""
 
     def __init__(self) -> None:
         super().__init__("offload_dashboard_backend")
@@ -76,7 +82,23 @@ class DashboardNode(Node):
         self.create_subscription(
             String, "/cloud/depth_stats", self._on_cloud_depth, 10
         )
+        self._cmd_vel_pub = self.create_publisher(TwistStamped, "cmd_vel", 10)
+        self._last_cmd_vel_ts: float = 0.0
         self.get_logger().info("dashboard backend node up")
+
+    def publish_cmd_vel(self, linear: float, angular: float) -> bool:
+        now = time.monotonic()
+        if now - self._last_cmd_vel_ts < _CMD_VEL_MIN_INTERVAL:
+            return False
+        self._last_cmd_vel_ts = now
+        msg = TwistStamped()
+        ros_now = self.get_clock().now().to_msg()
+        msg.header.stamp = ros_now
+        msg.header.frame_id = "base_link"
+        msg.twist.linear.x = float(linear)
+        msg.twist.angular.z = float(angular)
+        self._cmd_vel_pub.publish(msg)
+        return True
 
     def _on_scan(self, msg: LaserScan) -> None:
         ranges = [
@@ -130,8 +152,10 @@ class DashboardNode(Node):
 
 
 def start_ros_spin() -> None:
+    global _dashboard_node
     rclpy.init()
     node = DashboardNode()
+    _dashboard_node = node
     exe = SingleThreadedExecutor()
     exe.add_node(node)
 
@@ -254,9 +278,16 @@ async def ws_endpoint(ws: WebSocket) -> None:
             json.dumps({"ts": time.time(), "topics": LATEST.snapshot()})
         )
         while True:
-            # We don't expect messages from the client, but await keeps the
-            # connection alive. Any client ping arrives as a text frame.
-            await ws.receive_text()
+            raw = await ws.receive_text()
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if msg.get("type") == "cmd_vel" and _dashboard_node is not None:
+                _dashboard_node.publish_cmd_vel(
+                    linear=float(msg.get("linear", 0.0)),
+                    angular=float(msg.get("angular", 0.0)),
+                )
     except WebSocketDisconnect:
         pass
     finally:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type {
   CloudDepth,
   CloudStats,
@@ -18,6 +18,7 @@ export interface DashboardState {
   scanHz: number;
   cloudHz: number;
   depthHz: number;
+  sendCmd: (linear: number, angular: number) => void;
 }
 
 const RATE_WINDOW_MS = 3000;
@@ -28,13 +29,14 @@ function wsUrl(): string {
 }
 
 export function useDashboardSocket(): DashboardState {
-  const [state, setState] = useState<DashboardState>({
+  const [state, setState] = useState<Omit<DashboardState, "sendCmd">>({
     conn: "connecting",
     scanHz: 0,
     cloudHz: 0,
     depthHz: 0,
   });
 
+  const wsRef = useRef<WebSocket | null>(null);
   const scanTimes = useRef<number[]>([]);
   const cloudTimes = useRef<number[]>([]);
   const depthTimes = useRef<number[]>([]);
@@ -59,9 +61,11 @@ export function useDashboardSocket(): DashboardState {
     const connect = () => {
       setState((s) => ({ ...s, conn: "connecting" }));
       ws = new WebSocket(wsUrl());
+      wsRef.current = ws;
       ws.onopen = () => setState((s) => ({ ...s, conn: "open" }));
       ws.onclose = () => {
         setState((s) => ({ ...s, conn: "closed" }));
+        wsRef.current = null;
         if (!stopped) retry = setTimeout(connect, 1500);
       };
       ws.onerror = () => ws?.close();
@@ -90,7 +94,6 @@ export function useDashboardSocket(): DashboardState {
 
     connect();
 
-    // Keep the rate numbers live even if no messages arrive.
     const tick = setInterval(() => {
       setState((s) => ({
         ...s,
@@ -108,5 +111,11 @@ export function useDashboardSocket(): DashboardState {
     };
   }, []);
 
-  return state;
+  const sendCmd = useCallback((linear: number, angular: number) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "cmd_vel", linear, angular }));
+  }, []);
+
+  return { ...state, sendCmd };
 }

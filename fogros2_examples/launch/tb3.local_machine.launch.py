@@ -81,6 +81,7 @@ def generate_launch_description():
         ssh_key_path=ssh_key,
         local_ip=local_ip,
         dds_interface=dds_iface,
+        remote_dds_interface=os.environ.get("REMOTE_DDS_INTERFACE", "enp0s8"),
     )
 
     # Gazebo needs to find both turtlebot3_burger and turtlebot3_common.

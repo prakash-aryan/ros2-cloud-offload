@@ -4,6 +4,7 @@ import { TopologyPanel } from "./components/TopologyPanel";
 import { LocalStatsPanel } from "./components/LocalStatsPanel";
 import { CloudStatsPanel } from "./components/CloudStatsPanel";
 import { CloudDepthPanel } from "./components/CloudDepthPanel";
+import { TeleopPanel } from "./components/TeleopPanel";
 import { useDashboardSocket } from "./hooks/useDashboardSocket";
 import { useConfig } from "./hooks/useConfig";
 
@@ -28,7 +29,7 @@ export default function App() {
               cfg={cfg}
             />
           </GridItem>
-          <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr 1fr" }} gap={6}>
+          <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr 1fr 1fr" }} gap={6}>
             <GridItem>
               <LocalStatsPanel scan={state.scan} hz={state.scanHz} />
             </GridItem>
@@ -37,6 +38,9 @@ export default function App() {
             </GridItem>
             <GridItem>
               <CloudDepthPanel depth={state.cloudDepth} hz={state.depthHz} />
+            </GridItem>
+            <GridItem>
+              <TeleopPanel sendCmd={state.sendCmd} />
             </GridItem>
           </Grid>
         </Grid>

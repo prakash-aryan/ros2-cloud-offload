@@ -16,7 +16,7 @@ set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-required=(LOCAL_IP CLOUD_IP CLOUD_USER CLOUD_SSH_HOST SSH_KEY_PATH DDS_INTERFACE)
+required=(LOCAL_IP CLOUD_IP CLOUD_USER CLOUD_SSH_HOST DDS_INTERFACE)
 for v in "${required[@]}"; do
     if [[ -z "${!v:-}" ]]; then
         echo "error: $v is not set in $ENV_FILE" >&2
@@ -24,13 +24,23 @@ for v in "${required[@]}"; do
     fi
 done
 
+# Backward-compatible SSH key variable handling.
+if [[ -n "${CLOUD_SSH_KEY:-}" ]]; then
+    SSH_KEY_SRC="$CLOUD_SSH_KEY"
+elif [[ -n "${SSH_KEY_PATH:-}" ]]; then
+    SSH_KEY_SRC="$SSH_KEY_PATH"
+else
+    echo "error: set CLOUD_SSH_KEY (preferred) or SSH_KEY_PATH in $ENV_FILE" >&2
+    exit 1
+fi
+
 # ---- render cyclonedds config -------------------------------------------
 CDDS_OUT="$REPO_DIR/cyclonedds_local.xml"
 LOCAL_IP="$LOCAL_IP" CLOUD_IP="$CLOUD_IP" DDS_INTERFACE="$DDS_INTERFACE" \
     envsubst < "$REPO_DIR/cyclonedds_local.xml.template" > "$CDDS_OUT"
 
 # ---- resolve SSH key path on host ---------------------------------------
-SSH_KEY_HOST="${SSH_KEY_PATH/#\~/$HOME}"
+SSH_KEY_HOST="${SSH_KEY_SRC/#\~/$HOME}"
 if [[ ! -f "$SSH_KEY_HOST" ]]; then
     echo "error: SSH key $SSH_KEY_HOST does not exist" >&2
     exit 1
@@ -64,5 +74,6 @@ exec docker run -it --rm \
     -e LOCAL_HOSTNAME="${LOCAL_HOSTNAME:-local}" \
     -e CLOUD_HOSTNAME="${CLOUD_HOSTNAME:-cloud}" \
     -e DDS_INTERFACE="$DDS_INTERFACE" \
+    -e REMOTE_DDS_INTERFACE="${REMOTE_DDS_INTERFACE:-enp0s8}" \
     fogros2-local \
     bash

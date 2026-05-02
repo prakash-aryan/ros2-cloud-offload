@@ -37,6 +37,7 @@ class LocalMachine(CloudInstance):
         push_workspace=True,
         extra_dds_peers=(),
         dds_interface="tailscale0",
+        remote_dds_interface=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -51,6 +52,7 @@ class LocalMachine(CloudInstance):
         self._push_workspace = push_workspace
         self._extra_dds_peers = list(extra_dds_peers)
         self._dds_interface = dds_interface
+        self._remote_dds_interface = remote_dds_interface
 
         self.create()
 
@@ -131,7 +133,7 @@ class LocalMachine(CloudInstance):
         self.cyclone_builder = CycloneConfigBuilder(
             peers,
             username=self._username,
-            interface_name=self._dds_interface,
+            interface_name=self._remote_dds_interface,
         )
         self.cyclone_builder.generate_config_file()
         self.scp.send_file(
